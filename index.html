@@ -513,7 +513,10 @@ function startStudy(type) {
   mode = 'study';
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-study').classList.add('active');
-  document.getElementById('study-filter').style.display = 'none';
+  document.getElementById('study-filter').style.display = 'block';
+  // Set active chip
+  document.querySelectorAll('[data-study-type]').forEach(c => c.classList.remove('active'));
+  document.querySelector('[data-study-type="' + type + '"]').classList.add('active');
   document.querySelectorAll('.tabbar .tab').forEach(t => t.classList.remove('active'));
   renderStudy();
   saveProgress('study', studyIdx);
@@ -522,6 +525,7 @@ function startStudy(type) {
 function setStudyType(el) {
   document.querySelectorAll('[data-study-type]').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
+  applyStudyFilter();
 }
 
 function applyStudyFilter() {
@@ -607,7 +611,7 @@ function resumeProgress() {
     mode = 'study';
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById('page-study').classList.add('active');
-    document.getElementById('study-filter').style.display = 'none';
+    document.getElementById('study-filter').style.display = 'block';
     document.querySelectorAll('.tabbar .tab').forEach(t => t.classList.remove('active'));
     renderStudy();
   } else {
