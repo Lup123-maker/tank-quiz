@@ -202,7 +202,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Microsoft YaHei",sans-serif;b
     <div class="stat-card"><div class="stat-num">438</div><div class="stat-label">多选题</div></div>
   </div>
   <div class="mode-grid">
-    <div class="mode-card" onclick="startStudy('all')"><div class="icon">👀</div><div class="name">看题学习</div><div class="desc">逐题浏览，答案直接显示</div></div>
+    <div class="mode-card" onclick="showStudyFilter()"><div class="icon">👀</div><div class="name">看题学习</div><div class="desc">逐题浏览，答案直接显示</div></div>
     <div class="mode-card" onclick="startPractice('all')"><div class="icon">📖</div><div class="name">顺序刷题</div><div class="desc">从第1题开始顺序练习</div></div>
     <div class="mode-card" onclick="showFilter()"><div class="icon">🎯</div><div class="name">分类练习</div><div class="desc">按题型或题号范围练习</div></div>
     <div class="mode-card" onclick="showExamSetup()"><div class="icon">📝</div><div class="name">模拟考试</div><div class="desc">限时答题，交卷评分</div></div>
@@ -260,12 +260,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Microsoft YaHei",sans-serif;b
       </div>
     </div>
   </div>
-  <div class="q-progress">
+  <div class="q-progress" id="study-progress" style="display:none">
     <span id="study-current">1</span>/<span id="study-total">1525</span>
     <div class="bar"><div class="bar-fill" id="study-bar" style="width:0%"></div></div>
   </div>
   <div id="study-q-area"></div>
-  <div class="nav-btns">
+  <div class="nav-btns" style="display:none">
     <button class="nav-btn prev" onclick="studyPrev()">上一题</button>
     <button class="nav-btn next" onclick="studyNext()">下一题</button>
   </div>
@@ -507,25 +507,25 @@ function nextQ() {
 }
 
 // ===== STUDY MODE =====
-function startStudy(type) {
-  studyQs = type === 'all' ? QS.slice() : QS.filter(q => q.type === type);
-  studyIdx = 0;
+function showStudyFilter() {
   mode = 'study';
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-study').classList.add('active');
   document.getElementById('study-filter').style.display = 'block';
-  // Set active chip
+  document.getElementById('study-progress').style.display = 'none';
+  document.getElementById('study-q-area').innerHTML = '';
+  document.querySelector('#page-study .nav-btns').style.display = 'none';
+  // Reset chips to "全部"
   document.querySelectorAll('[data-study-type]').forEach(c => c.classList.remove('active'));
-  document.querySelector('[data-study-type="' + type + '"]').classList.add('active');
+  document.querySelector('[data-study-type="all"]').classList.add('active');
+  document.getElementById('study-from').value = '';
+  document.getElementById('study-to').value = '';
   document.querySelectorAll('.tabbar .tab').forEach(t => t.classList.remove('active'));
-  renderStudy();
-  saveProgress('study', studyIdx);
 }
 
 function setStudyType(el) {
   document.querySelectorAll('[data-study-type]').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
-  applyStudyFilter();
 }
 
 function applyStudyFilter() {
@@ -538,6 +538,14 @@ function applyStudyFilter() {
     return true;
   });
   studyIdx = 0;
+  if (studyQs.length === 0) {
+    document.getElementById('study-progress').style.display = 'none';
+    document.querySelector('#page-study .nav-btns').style.display = 'none';
+    document.getElementById('study-q-area').innerHTML = '<div class="wrong-empty"><div class="icon">🔍</div><p>没有匹配的题目</p></div>';
+    return;
+  }
+  document.getElementById('study-progress').style.display = 'flex';
+  document.querySelector('#page-study .nav-btns').style.display = 'flex';
   renderStudy();
   saveProgress('study', studyIdx);
 }
@@ -612,6 +620,8 @@ function resumeProgress() {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById('page-study').classList.add('active');
     document.getElementById('study-filter').style.display = 'block';
+    document.getElementById('study-progress').style.display = 'flex';
+    document.querySelector('#page-study .nav-btns').style.display = 'flex';
     document.querySelectorAll('.tabbar .tab').forEach(t => t.classList.remove('active'));
     renderStudy();
   } else {
