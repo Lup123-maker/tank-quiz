@@ -202,10 +202,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Microsoft YaHei",sans-serif;b
     <div class="stat-card"><div class="stat-num">438</div><div class="stat-label">多选题</div></div>
   </div>
   <div class="mode-grid">
+    <div class="mode-card" onclick="startStudy('all')"><div class="icon">👀</div><div class="name">看题学习</div><div class="desc">逐题浏览，答案直接显示</div></div>
     <div class="mode-card" onclick="startPractice('all')"><div class="icon">📖</div><div class="name">顺序刷题</div><div class="desc">从第1题开始顺序练习</div></div>
     <div class="mode-card" onclick="showFilter()"><div class="icon">🎯</div><div class="name">分类练习</div><div class="desc">按题型或题号范围练习</div></div>
     <div class="mode-card" onclick="showExamSetup()"><div class="icon">📝</div><div class="name">模拟考试</div><div class="desc">限时答题，交卷评分</div></div>
     <div class="mode-card" onclick="switchTab('wrong')"><div class="icon">📕</div><div class="name">错题本</div><div class="desc">回顾做错的题目</div></div>
+    <div class="mode-card" onclick="resumeProgress()"><div class="icon">🔄</div><div class="name">继续上次</div><div class="desc">恢复上次刷题进度</div></div>
   </div>
 </div>
 
@@ -236,6 +238,36 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Microsoft YaHei",sans-serif;b
   <div class="nav-btns">
     <button class="nav-btn prev" onclick="prevQ()">上一题</button>
     <button class="nav-btn next" id="btn-next" onclick="nextQ()">下一题</button>
+  </div>
+</div>
+
+<!-- STUDY MODE -->
+<div id="page-study" class="page">
+  <div class="filter-bar" id="study-filter" style="display:none">
+    <div class="filter-row">
+      <span class="chip active" data-study-type="all" onclick="setStudyType(this)">全部</span>
+      <span class="chip" data-study-type="tf" onclick="setStudyType(this)">判断题</span>
+      <span class="chip" data-study-type="single" onclick="setStudyType(this)">单选题</span>
+      <span class="chip" data-study-type="multi" onclick="setStudyType(this)">多选题</span>
+    </div>
+    <div class="filter-row">
+      <div class="range-input">
+        <span>题号</span>
+        <input type="number" id="study-from" min="1" max="1525" placeholder="起">
+        <span>-</span>
+        <input type="number" id="study-to" min="1" max="1525" placeholder="止">
+        <button class="btn-go" onclick="applyStudyFilter()">开始</button>
+      </div>
+    </div>
+  </div>
+  <div class="q-progress">
+    <span id="study-current">1</span>/<span id="study-total">1525</span>
+    <div class="bar"><div class="bar-fill" id="study-bar" style="width:0%"></div></div>
+  </div>
+  <div id="study-q-area"></div>
+  <div class="nav-btns">
+    <button class="nav-btn prev" onclick="studyPrev()">上一题</button>
+    <button class="nav-btn next" onclick="studyNext()">下一题</button>
   </div>
 </div>
 
@@ -361,6 +393,8 @@ let examTimer = null;
 let examTimeLeft = 0;
 let wrongReviewQs = [];
 let wrongReviewIdx = 0;
+let studyQs = [];      // study mode question list
+let studyIdx = 0;
 
 // ===== INIT =====
 function init() {
@@ -369,6 +403,16 @@ function init() {
   updateWrongBadge();
   practiceQs = QS.slice();
   renderPractice();
+  // Check saved progress
+  const prog = loadProgress();
+  if (prog) {
+    const hint = document.createElement('div');
+    hint.style.cssText = 'background:var(--primary-light);border:1px solid var(--primary);border-radius:var(--radius);padding:12px 16px;margin:12px 0;font-size:13px;display:flex;justify-content:space-between;align-items:center';
+    const modeNames = {practice:'刷题',study:'看题'};
+    hint.innerHTML = '<span>上次进度：' + (modeNames[prog.mode]||'刷题') + ' 第' + (prog.idx+1) + '题</span><button class="btn-go" onclick="resumeProgress()">继续</button>';
+    const hero = document.querySelector('.home-hero');
+    if (hero) hero.after(hint);
+  }
 }
 
 // ===== NAVIGATION =====
@@ -456,10 +500,129 @@ function renderPractice() {
 }
 
 function prevQ() {
-  if (practiceIdx > 0) { practiceIdx--; renderPractice(); }
+  if (practiceIdx > 0) { practiceIdx--; renderPractice(); saveProgress('practice', practiceIdx); }
 }
 function nextQ() {
-  if (practiceIdx < practiceQs.length - 1) { practiceIdx++; renderPractice(); }
+  if (practiceIdx < practiceQs.length - 1) { practiceIdx++; renderPractice(); saveProgress('practice', practiceIdx); }
+}
+
+// ===== STUDY MODE =====
+function startStudy(type) {
+  studyQs = type === 'all' ? QS.slice() : QS.filter(q => q.type === type);
+  studyIdx = 0;
+  mode = 'study';
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-study').classList.add('active');
+  document.getElementById('study-filter').style.display = 'none';
+  document.querySelectorAll('.tabbar .tab').forEach(t => t.classList.remove('active'));
+  renderStudy();
+  saveProgress('study', studyIdx);
+}
+
+function setStudyType(el) {
+  document.querySelectorAll('[data-study-type]').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function applyStudyFilter() {
+  const type = document.querySelector('[data-study-type].active').dataset.studyType;
+  const from = parseInt(document.getElementById('study-from').value) || 1;
+  const to = parseInt(document.getElementById('study-to').value) || 9999;
+  studyQs = QS.filter(q => {
+    if (type !== 'all' && q.type !== type) return false;
+    if (q.id < from || q.id > to) return false;
+    return true;
+  });
+  studyIdx = 0;
+  renderStudy();
+  saveProgress('study', studyIdx);
+}
+
+function renderStudy() {
+  if (studyQs.length === 0) {
+    document.getElementById('study-q-area').innerHTML = '<div class="wrong-empty"><div class="icon">🔍</div><p>没有匹配的题目</p></div>';
+    return;
+  }
+  const q = studyQs[studyIdx];
+  document.getElementById('study-current').textContent = studyIdx + 1;
+  document.getElementById('study-total').textContent = studyQs.length;
+  document.getElementById('study-bar').style.width = ((studyIdx + 1) / studyQs.length * 100) + '%';
+  document.getElementById('study-q-area').innerHTML = renderStudyQuestion(q);
+}
+
+function renderStudyQuestion(q) {
+  const tagMap = { tf: '判断题', single: '单选题', multi: '多选题' };
+  let html = '<div class="q-card fade-in">';
+  html += '<span class="q-tag ' + q.type + '">' + tagMap[q.type] + ' #' + q.id + '</span>';
+  html += '<div class="q-text">' + formatQText(q.q) + '</div>';
+
+  if (q.type === 'tf') {
+    html += '<div class="tf-opts">';
+    ['√', '×'].forEach(v => {
+      let cls = v === q.a ? ' correct' : '';
+      html += '<div class="tf-opt' + cls + '" style="cursor:default">' + v + '</div>';
+    });
+    html += '</div>';
+  } else {
+    html += '<div class="opts">';
+    const keys = Object.keys(q.opts).sort();
+    const correctAns = q.a.split('').sort();
+    keys.forEach(k => {
+      let cls = correctAns.includes(k) ? ' correct' : '';
+      html += '<div class="opt' + cls + '" style="cursor:default">';
+      html += '<span class="opt-key">' + k + '</span><span class="opt-text">' + q.opts[k] + '</span></div>';
+    });
+    html += '</div>';
+  }
+
+  html += '<div class="feedback show correct">✅ 正确答案：<strong>' + q.a + '</strong></div>';
+  html += '</div>';
+  return html;
+}
+
+function studyPrev() {
+  if (studyIdx > 0) { studyIdx--; renderStudy(); saveProgress('study', studyIdx); }
+}
+function studyNext() {
+  if (studyIdx < studyQs.length - 1) { studyIdx++; renderStudy(); saveProgress('study', studyIdx); }
+}
+
+// ===== PROGRESS PERSISTENCE =====
+function saveProgress(md, idx) {
+  localStorage.setItem('quizProgress', JSON.stringify({ mode: md, idx: idx, time: Date.now() }));
+}
+function loadProgress() {
+  try {
+    const p = JSON.parse(localStorage.getItem('quizProgress'));
+    if (p && Date.now() - p.time < 30*24*3600*1000) return p; // valid for 30 days
+  } catch(e) {}
+  return null;
+}
+function resumeProgress() {
+  const prog = loadProgress();
+  if (!prog) { alert('暂无保存的进度'); return; }
+  if (prog.mode === 'study') {
+    studyQs = QS.slice();
+    studyIdx = Math.min(prog.idx, studyQs.length - 1);
+    mode = 'study';
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-study').classList.add('active');
+    document.getElementById('study-filter').style.display = 'none';
+    document.querySelectorAll('.tabbar .tab').forEach(t => t.classList.remove('active'));
+    renderStudy();
+  } else {
+    practiceQs = QS.slice();
+    practiceIdx = Math.min(prog.idx, practiceQs.length - 1);
+    answered = {};
+    judged = {};
+    mode = 'practice';
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-practice').classList.add('active');
+    document.getElementById('practice-filter').style.display = 'none';
+    document.querySelectorAll('.tabbar .tab').forEach(t => t.classList.remove('active'));
+    document.querySelector('.tab[data-tab="practice"]').classList.add('active');
+    renderPractice();
+  }
 }
 
 // ===== RENDER QUESTION =====
@@ -909,6 +1072,9 @@ document.addEventListener('keydown', e => {
   if (mode === 'practice') {
     if (e.key === 'ArrowLeft') prevQ();
     else if (e.key === 'ArrowRight') nextQ();
+  } else if (mode === 'study') {
+    if (e.key === 'ArrowLeft') studyPrev();
+    else if (e.key === 'ArrowRight') studyNext();
   }
 });
 
@@ -919,6 +1085,7 @@ document.addEventListener('touchend', e => {
   const diff = e.changedTouches[0].clientX - touchStartX;
   if (Math.abs(diff) > 60) {
     if (mode === 'practice') { diff > 0 ? prevQ() : nextQ(); }
+    else if (mode === 'study') { diff > 0 ? studyPrev() : studyNext(); }
     else if (mode === 'wrong-review') { diff > 0 ? wrongPrev() : wrongNext(); }
   }
 });
