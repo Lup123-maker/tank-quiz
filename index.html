@@ -838,7 +838,7 @@ function judgeAnswer(qid, ctx) {
 
 // ===== WRONG BOOK =====
 function saveWrong() {
-  localStorage.setItem('wrongSet_' + currentBankIdx), JSON.stringify(wrongSet));
+  localStorage.setItem('wrongSet_' + currentBankIdx, JSON.stringify(wrongSet));
   updateWrongBadge();
 }
 
